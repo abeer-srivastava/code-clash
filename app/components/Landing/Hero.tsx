@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { useUserStore } from "@/store/useUserStore";
 import Link from "next/link";
+import TextType from '@/components/TextType';
 
 export default function Hero(){
       const user=useUserStore((state)=>state.user);
@@ -9,7 +10,13 @@ export default function Hero(){
         <section className="px-6 md:px-10 lg:px-16 max-w-7xl mx-auto flex flex-col md:flex-row items-center gap-10 md:gap-16 py-16">
           <div className="flex-1">
             <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight text-amber-400">
-              Compete. Code. Conquer.
+              <TextType 
+                text={["Compete...", "Code...", "Conquer..."]}
+                typingSpeed={75}
+                pauseDuration={2000}
+                showCursor={true}
+                cursorCharacter="|"
+              />
             </h1>
             <p className="mt-4 text-base md:text-lg text-amber-100/90 max-w-2xl">
               Solve algorithmic challenges, climb the leaderboard, and join competitions in real time. Built for speed, learning, and fun.

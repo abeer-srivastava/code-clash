@@ -3,13 +3,16 @@ import Background from "@/components/Background";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { NavBarComp } from "../components/Navbar";
+import Shuffle from "@/components/Shuffle";
 
 export default function Competition() {
   const [isOpen, setIsOpen] = useState(false);
   const [mode, setMode] = useState(""); // "create" or "join"
   const [roomId, setRoomId] = useState("");
 
-  const openModal = (type) => {
+  type RoomMode = "create" | "join";
+
+  const openModal = (type: RoomMode): void => {
     setMode(type);
     setIsOpen(true);
   };
@@ -19,7 +22,7 @@ export default function Competition() {
     setRoomId("");
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (mode === "create") {
       console.log("Creating Room with ID:", roomId || "(auto-generate)");
@@ -34,7 +37,21 @@ export default function Competition() {
         <NavBarComp></NavBarComp>
         <div className="z-50 flex flex-col items-center justify-center min-h-screen text-amber-300">
         <div className=" h-5/4 w-lg flex flex-col items-center justify-center bg-black/10 border border-[#BA8B02] backdrop-blur-md bg-opacity-10 p-8 rounded-xl">
-        <h1 className="text-4xl font-bold mb-4">Challenge. Compete. Conquer.</h1>
+       
+          <Shuffle
+            text="COMPETE  CODE  CONQUER"
+            shuffleDirection="right"
+            duration={0.35}
+            animationMode="evenodd"
+            shuffleTimes={1}
+            ease="power3.out"
+            stagger={0.03}
+            threshold={0.1}
+            triggerOnce={true}
+            triggerOnHover={true}
+            respectReducedMotion={true}
+          />
+        
         <p className="text-lg mb-8 text-amber-100 font-semibold">
           Get Match up with other coders and solve algorithmic challenges in real time.
         </p>
