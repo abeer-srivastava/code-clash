@@ -4,11 +4,14 @@ import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { NavBarComp } from "../components/Navbar";
 import Shuffle from "@/components/Shuffle";
+import api from "@/lib/api";
+import { useRouter } from "next/navigation";
 
 export default function Competition() {
   const [isOpen, setIsOpen] = useState(false);
   const [mode, setMode] = useState(""); // "create" or "join"
   const [roomId, setRoomId] = useState("");
+  const router=useRouter();
 
   type RoomMode = "create" | "join";
 
@@ -22,10 +25,32 @@ export default function Competition() {
     setRoomId("");
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (mode === "create") {
       console.log("Creating Room with ID:", roomId || "(auto-generate)");
+      try {
+        const response = await api.post("/room", {
+          roomName: roomId
+        });
+        console.log("Response:", response.data);
+        const newId = response.data?.roomId ?? response.data?.id ?? response.data?.id;
+        if (!newId) {
+          // handle case where backend returned an existing room id in 409
+          console.warn("No room id returned", response.data);
+        } else {
+          setRoomId(String(newId));
+          router.replace(`/battle/${newId}`);
+        }
+      } catch (error: any) {
+        // if backend returns 409 we can still redirect to existing room
+        if (error?.response?.status === 409 && error.response.data?.roomId) {
+          const existingId = error.response.data.roomId;
+          router.replace(`/battle/${existingId}`);
+          return;
+        }
+        console.log(error);
+      }
     } else {
       console.log("Joining Room with ID:", roomId);
     }

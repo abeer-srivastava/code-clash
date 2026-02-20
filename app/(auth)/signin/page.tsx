@@ -15,6 +15,8 @@ import { FcGoogle } from "react-icons/fc";
 import { useUserStore } from "@/store/useUserStore";
 import SignUpSection from "@/app/components/SignUpSection";
 import { Button } from "@/components/ui/button";
+import axios from "axios";
+import api from "@/lib/api";
 
 const amberButton =
   "w-full flex justify-center items-center gap-2 py-3 px-4 border rounded-lg font-medium text-md transition-all focus:outline-none focus:ring-2 focus:ring-amber-400";
@@ -26,7 +28,7 @@ function Signin() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       if (currentUser) {
-        console.log(currentUser);
+        console.log("hello this is the current user here ",currentUser);
         setUser(currentUser);
       } else {
         clearUser();
@@ -42,6 +44,12 @@ function Signin() {
       const credential = GoogleAuthProvider.credentialFromResult(result);
       if (!credential) return;
       console.log("Google User:", result.user, "Token:", credential.accessToken);
+      const response = await api.post("/auth", {
+      name: result.user?.displayName,
+      email: result.user?.email,
+      picture: result.user?.photoURL,
+    });
+
     } catch (error) {
       console.error("Google Auth Error:", error);
     }
