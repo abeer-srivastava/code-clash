@@ -1,10 +1,12 @@
+"use client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Trophy, Users, Code2, BarChart3, Target, Zap } from "lucide-react";
+import { Trophy, Users, Code2, BarChart3, Target, Zap, Loader2 } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { useUserStore } from "@/store/useUserStore";
-import { use } from "react";
 import { useRouter } from "next/navigation";
+import { useSocket } from "@/lib/useSocket";
+import { useEffect, useState } from "react";
 
 export default function Dashboard() {
   const leetcodeData = [
@@ -14,8 +16,33 @@ export default function Dashboard() {
     { name: "Thu", rating: 1670 },
     { name: "Fri", rating: 1690 },
   ];
-  const router=useRouter();
-  const user=useUserStore((state)=>state.user);
+  const router = useRouter();
+  const user = useUserStore((state) => state.user);
+  const { isConnected, sendMessage, socket } = useSocket();
+  const [isSearching, setIsSearching] = useState(false);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleMessage = (event: MessageEvent) => {
+      const message = JSON.parse(event.data);
+      if (message.type === "MATCH_FOUND") {
+        setIsSearching(false);
+        router.push(`/battle/${message.payload.roomId}`);
+      }
+    };
+
+    socket.addEventListener("message", handleMessage);
+    return () => socket.removeEventListener("message", handleMessage);
+  }, [socket, router]);
+
+  const handleStartMatch = () => {
+    if (isConnected) {
+      setIsSearching(true);
+      sendMessage("JOIN_MATCHMAKING", { elo: 1200 });
+    }
+  };
+
   return (
     <div className="h-full flex flex-col text-amber-200 p-6 md:p-8 space-y-8">
       <div className="flex justify-between items-center">
@@ -24,9 +51,20 @@ export default function Dashboard() {
           <p className="text-sm text-amber-200/70">Compete, practice, and track your progress.</p>
         </div>
         <div className="flex gap-3">
-          <Button className="bg-amber-600 hover:bg-amber-700 text-black" 
-          onClick={()=>router.replace("/competitions")}
-          >Start Match</Button>
+          <Button 
+            className="bg-amber-600 hover:bg-amber-700 text-black min-w-[140px]" 
+            onClick={handleStartMatch}
+            disabled={!isConnected || isSearching}
+          >
+            {isSearching ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Searching...
+              </>
+            ) : (
+              "Start Match"
+            )}
+          </Button>
           <Button variant="neutral" className="bg-black border-amber-500 text-amber-300 hover:bg-amber-500/10">Practice</Button>
         </div>
       </div>
@@ -49,7 +87,7 @@ export default function Dashboard() {
                 <p className="text-xs md:text-sm text-amber-200/80 ">{s.label}</p>
                 <s.icon className={`${s.tint} w-6 h-6`} />
               </div>
-              <h2 className="mt-2 text-xl md:text-2xl font-bold text-amber-300 {s.tint}">{s.value}</h2>
+              <h2 className="mt-2 text-xl md:text-2xl font-bold text-amber-300">{s.value}</h2>
             </CardContent>
           </Card>
         ))}
