@@ -6,16 +6,15 @@ import { NavBarComp } from "../components/Navbar";
 import Shuffle from "@/components/Shuffle";
 import api from "@/lib/api";
 import { useRouter } from "next/navigation";
+import { Swords, Plus, Users, Zap, Terminal, X } from "lucide-react";
 
 export default function Competition() {
   const [isOpen, setIsOpen] = useState(false);
-  const [mode, setMode] = useState(""); // "create" or "join"
+  const [mode, setMode] = useState<"create" | "join">("create");
   const [roomId, setRoomId] = useState("");
-  const router=useRouter();
+  const router = useRouter();
 
-  type RoomMode = "create" | "join";
-
-  const openModal = (type: RoomMode): void => {
+  const openModal = (type: "create" | "join"): void => {
     setMode(type);
     setIsOpen(true);
   };
@@ -28,41 +27,25 @@ export default function Competition() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (mode === "create") {
-      console.log("Creating Room with ID:", roomId || "(auto-generate)");
       try {
-        const response = await api.post("/room", {
-          roomName: roomId
-        });
-        console.log("Response:", response.data);
+        const response = await api.post("/room", { roomName: roomId });
         const newId = response.data?.roomSlug ?? response.data?.roomId ?? response.data?.id;
-        if (!newId) {
-          console.warn("No room identifier returned", response.data);
-        } else {
-          setRoomId(String(newId));
-          router.replace(`/battle/${newId}`);
-        }
+        if (newId) router.replace(`/battle/${newId}`);
       } catch (error: any) {
         if (error?.response?.status === 409 && error.response.data?.roomSlug) {
-          const existingSlug = error.response.data.roomSlug;
-          router.replace(`/battle/${existingSlug}`);
-          return;
+          router.replace(`/battle/${error.response.data.roomSlug}`);
+        } else {
+          console.error("Error creating room:", error);
         }
-        console.error("Error creating room:", error);
       }
     } else {
-      console.log("Joining Room with ID:", roomId);
       try {
-        // Try to fetch room by slug to verify it exists
         const response = await api.get(`/room/${roomId}`);
-        if (response.data) {
-          router.replace(`/battle/${roomId}`);
-        }
+        if (response.data) router.replace(`/battle/${roomId}`);
       } catch (error: any) {
         if (error?.response?.status === 404) {
-          alert("Room not found! Please check the Room ID/Name.");
+          alert("ARENA NOT FOUND! Check your ID.");
         } else {
-          console.error("Error joining room:", error);
-          // Still try to redirect as a fallback
           router.replace(`/battle/${roomId}`);
         }
       }
@@ -71,92 +54,106 @@ export default function Competition() {
   };
 
   return (
-    <Background>
-        <NavBarComp></NavBarComp>
-        <div className="z-50 flex flex-col items-center justify-center min-h-screen text-amber-300">
-        <div className=" h-5/4 w-lg flex flex-col items-center justify-center bg-black/10 border border-[#BA8B02] backdrop-blur-md bg-opacity-10 p-8 rounded-xl">
-       
-          <Shuffle
-            text="COMPETE  CODE  CONQUER"
-            shuffleDirection="right"
-            duration={0.35}
-            animationMode="evenodd"
-            shuffleTimes={1}
-            ease="power3.out"
-            stagger={0.03}
-            threshold={0.1}
-            triggerOnce={true}
-            triggerOnHover={true}
-            respectReducedMotion={true}
-          />
-        
-        <p className="text-lg mb-8 text-amber-100 font-semibold">
-          Get Match up with other coders and solve algorithmic challenges in real time.
-        </p>
-        <div>
-        <Button
-          onClick={() => openModal("create")}
-          className="m-1 bg-amber-600 hover:bg-amber-700 text-black px-4 py-2 rounded">
-          Create a Room
-        </Button>
-        <Button
-          onClick={() => openModal("join")}
-          className="m-1 bg-amber-600 hover:bg-amber-700 text-black px-4 py-2 rounded">
-          Join a Room
-        </Button>
+    <div className="min-h-screen bg-background font-heading">
+      <NavBarComp />
+
+      <main className="pt-32 pb-20 px-6 max-w-7xl mx-auto">
+        {/* Hero Section */}
+        <div className="border-8 border-black bg-main p-12 shadow-[16px_16px_0px_0px_rgba(0,0,0,1)] mb-16 relative overflow-hidden text-black">
+          <div className="absolute top-0 right-0 p-4 opacity-10">
+            <Swords size={350} className="text-black" />
+          </div>
+
+          <div className="relative z-10 max-w-3xl">
+            <div className="bg-black text-white inline-block px-4 py-1 text-sm font-black uppercase mb-6 tracking-widest">
+              Live Tournament Access
+            </div>
+
+            <h1 className="text-6xl md:text-8xl font-black uppercase tracking-tighter leading-none mb-8 text-black">
+              BATTLE <span className="bg-white px-2 border-4 border-black inline-block transform rotate-2">GROUND</span>
+            </h1>
+
+            <div className="text-2xl font-bold uppercase tracking-tight text-black/80 mb-10 max-w-xl">
+              COMPETE . CODE . CONQUER
+            </div>
+
+            <div className="flex flex-wrap gap-6">
+              <Button
+                onClick={() => openModal("create")}
+                className="h-20 px-10 text-2xl font-black uppercase tracking-tighter shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[4px] hover:translate-y-[4px] hover:shadow-none transition-all bg-black text-white border-4 border-black"
+              >
+                <Plus className="mr-2 h-8 w-8" /> Create Arena
+              </Button>
+              <Button
+                variant="neutral"
+                onClick={() => openModal("join")}
+                className="h-20 px-10 text-2xl font-black uppercase tracking-tighter shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[4px] hover:translate-y-[4px] hover:shadow-none transition-all bg-white text-black border-4 border-black"
+              >
+                <Users className="mr-2 h-8 w-8" /> Join Arena
+              </Button>
+            </div>
+          </div>
         </div>
-      </div>
 
-      {/* Modal */}
+        {/* Info Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {[
+            { title: "1v1 DUELS", desc: "Classic head-to-head algorithm battles.", color: "bg-cyan-400" },
+            { title: "TEAM CLASH", desc: "Collaborate to solve complex systems.", color: "bg-red-400" },
+            { title: "BLITZ MODE", desc: "5-minute sprints for maximum efficiency.", color: "bg-white" }
+          ].map((item, i) => (
+            <div key={i} className={`border-4 border-black p-8 shadow-shadow ${item.color} text-black`}>
+              <Zap className="w-10 h-10 mb-6 text-black" />
+              <h3 className="text-2xl font-black uppercase mb-2 text-black">{item.title}</h3>
+              <p className="font-bold text-black/70 uppercase text-sm tracking-tighter">{item.desc}</p>
+            </div>
+          ))}
+        </div>
+      </main>
+
+      {/* Neobrutalist Modal */}
       {isOpen && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black/10 backdrop-blur-lg bg-opacity-60 p-4 z-50">
-          <div className="bg-black p-6 rounded-xl w-80 shadow-xl border border-[#BA8B02]">
-            <h2 className="text-xl mb-4 font-semibold text-[#BA8B02]">
-              {mode === "create" ? "Create Room" : "Join Room"}
-            </h2>
+        <div className="fixed inset-0 flex items-center justify-center bg-black/80 backdrop-grayscale-[0.5] p-4 z-[100]">
+          <div className="bg-white border-8 border-black p-10 max-w-md w-full shadow-[20px_20px_0px_0px_rgba(255,191,0,1)] animate-in zoom-in-95 duration-200 text-black">
+            <div className="flex justify-between items-start mb-8">
+              <h2 className="text-4xl font-black uppercase italic tracking-tighter text-black">
+                {mode === "create" ? "NEW_ARENA" : "JOIN_COMBAT"}
+              </h2>
+              <Button variant="neutral" size="icon" onClick={closeModal} className="border-2 border-black text-black bg-white">
+                <X className="w-6 h-6" />
+              </Button>
+            </div>
 
-            <form onSubmit={handleSubmit} className="flex flex-col space-y-4">
-              {mode === "join" && (
+            <form onSubmit={handleSubmit} className="space-y-8">
+              <div className="space-y-2">
+                <label className="text-xs font-black uppercase tracking-widest text-black/60">IDENTIFIER_KEY</label>
                 <input
                   type="text"
-                  placeholder="Enter Room ID"
+                  placeholder={mode === "join" ? "ARENA_ID_REQUIRED" : "OPTIONAL_CUSTOM_ID"}
                   value={roomId}
                   onChange={(e) => setRoomId(e.target.value)}
-                  className="p-2 rounded bg-black  border border-[#BA8B02] text-white focus:outline-none focus:ring-2 focus:ring-[#BA8B02]"
-                  required
+                  className="w-full p-4 border-4 border-black bg-secondary-background font-mono font-bold text-lg focus:outline-none focus:bg-main transition-colors text-black placeholder:text-black/30"
+                  required={mode === "join"}
                 />
-              )}
+              </div>
 
-              {mode === "create" && (
-                <input
-                  type="text"
-                  placeholder="Optional: Enter Custom Room ID"
-                  value={roomId}
-                  onChange={(e) => setRoomId(e.target.value)}
-                  className="p-2 rounded bg-black  border border-[#BA8B02] text-white focus:outline-none focus:ring-2 focus:ring-[#BA8B02]"
-                />
-              )}
+              <div className="bg-black p-4 text-green-500 font-mono text-xs">
+                <p>{">"} INITIALIZING_PROTOCOL...</p>
+                <p>{">"} WAITING_FOR_HANDSHAKE</p>
+              </div>
 
-              <div className="flex justify-end gap-3 mt-4">
-                <Button
-                  type="button"
-                  onClick={closeModal}
-                  className="px-3 py-2 bg-gray-950 hover:bg-gray-950 border-amber-200 rounded text-amber-300"
-                >
-                  Cancel
-                </Button>
+              <div className="flex gap-4">
                 <Button
                   type="submit"
-                  className="px-3 py-2 bg-amber-600 hover:bg-amber-700 rounded"
+                  className="flex-1 h-16 text-xl font-black uppercase tracking-widest bg-black text-white border-4 border-black"
                 >
-                  {mode === "create" ? "Create" : "Join"}
+                  {mode === "create" ? "START_MATCH" : "ENTER_ROOM"}
                 </Button>
               </div>
             </form>
           </div>
         </div>
       )}
-      </div>
-    </Background>
+    </div>
   );
 }

@@ -6,69 +6,58 @@ import {
   GoogleAuthProvider,
   onAuthStateChanged,
   signInWithPopup,
-  signInWithRedirect,
   signOut
 } from "firebase/auth";
-import { useEffect } from "react";
-import { Codesandbox, GithubIcon } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { GithubIcon, LogOut, Terminal, ShieldCheck } from "lucide-react";
 import { FcGoogle } from "react-icons/fc";
 import { useUserStore } from "@/store/useUserStore";
 import SignUpSection from "@/app/components/SignUpSection";
 import { Button } from "@/components/ui/button";
-import axios from "axios";
 import api from "@/lib/api";
-
-const amberButton =
-  "w-full flex justify-center items-center gap-2 py-3 px-4 border rounded-lg font-medium text-md transition-all focus:outline-none focus:ring-2 focus:ring-amber-400";
 
 function Signin() {
   const { user, setUser, clearUser } = useUserStore();
+  const router = useRouter();
+  const [loading, setLoading] = useState(true);
 
-  //  Keep user signed in across refresh
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setLoading(false);
       if (currentUser) {
-        console.log("hello this is the current user here ",currentUser);
         setUser(currentUser);
+        router.push("/");
       } else {
         clearUser();
       }
     });
     return () => unsubscribe();
-  }, [setUser, clearUser]);
+  }, [setUser, clearUser, router]);
 
-  // 
   const handleGoogleSignUp = async () => {
     try {
       const result = await signInWithPopup(auth, provider);
-      const credential = GoogleAuthProvider.credentialFromResult(result);
-      if (!credential) return;
-      console.log("Google User:", result.user, "Token:", credential.accessToken);
-      const response = await api.post("/auth", {
-      name: result.user?.displayName,
-      email: result.user?.email,
-      picture: result.user?.photoURL,
-    });
-
+      await api.post("/auth", {
+        name: result.user?.displayName,
+        email: result.user?.email,
+        picture: result.user?.photoURL,
+      });
+      router.push("/");
     } catch (error) {
       console.error("Google Auth Error:", error);
     }
   };
 
-  // GitHub Auth ToDo  
   const handleGithubSignUp = async () => {
-    console.log("TODO: Implement GitHub SignIn");
    try {
-     const result=await signInWithPopup(auth, githubProvider);
-     const credential=GithubAuthProvider.credentialFromResult(result);
-     if(!credential) return ;
-     console.log("Github user:",result,"Token",credential.accessToken);
+     await signInWithPopup(auth, githubProvider);
+     router.push("/");
    } catch (error) {
-    console.log(error);
+    console.error("Github Auth Error:", error);
    }
   };
 
-  // Sign Out
   const handleSignOut = async () => {
     try {
       await signOut(auth);
@@ -78,64 +67,86 @@ function Signin() {
     }
   };
 
-  return (
-    <div className="flex bg-black min-h-screen font-mono">
-      
-      <SignUpSection></SignUpSection>
+  if (loading) return null;
 
-      <div className="flex w-full md:w-3/5 bg-gray-950 justify-center items-center">
+  return (
+    <div className="flex bg-background min-h-screen font-heading">
+      <SignUpSection />
+
+      <div className="flex w-full md:w-3/5 bg-secondary-background justify-center items-center p-6">
         <div className="w-full max-w-md">
-          <div className="p-6 text-center">
-            <h2 className="text-3xl font-bold mb-2 text-amber-500">
-              {user ? "Welcome Back" : "Sign In"}
+          {/* Header */}
+          <div className="mb-10 text-center">
+            <div className="inline-block bg-main border-4 border-black p-3 mb-6 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+               <ShieldCheck className="w-12 h-12 text-black" />
+            </div>
+            <h2 className="text-5xl font-black uppercase tracking-tighter text-foreground mb-2">
+              {user ? "AUTHENTICATED" : "ENTRY POINT"}
             </h2>
-            <p className="text-gray-400 text-sm">
-              {user
-                ? "Continue where you left off"
-                : "Log in to continue to CodeClash"}
+            <p className="text-xl font-bold uppercase tracking-widest text-muted-foreground">
+               {user ? "Identity Verified" : "Access the Arena"}
             </p>
           </div>
 
-          <div className="bg-white p-8 shadow rounded-xl space-y-4">
+          {/* Auth Card */}
+          <div className="bg-white border-4 border-black p-10 shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] space-y-8">
             {user ? (
-              <>
-                <p className="text-lg font-medium text-gray-800">
-                  Hello, {user.displayName || user.email}
-                </p>
+              <div className="space-y-6 text-center">
+                <div className="p-4 border-2 border-dashed border-black bg-main/10">
+                   <p className="text-sm font-black uppercase text-muted-foreground mb-1">Current Session</p>
+                   <p className="text-xl font-black">{user.displayName || user.email}</p>
+                </div>
                 <Button
-                  className={`${amberButton} bg-amber-400 text-black hover:bg-amber-500`}
+                  variant="reverse"
+                  className="w-full h-16 text-xl font-black uppercase"
                   onClick={handleSignOut}
                 >
-                  Sign Out
+                  <LogOut className="mr-2 h-6 w-6" /> Terminate
                 </Button>
-              </>
+              </div>
             ) : (
               <>
-                <Button variant="default" 
-                  className={`${amberButton} hover:bg-gray-100 text-black`}
+                <Button 
+                  variant="neutral"
+                  className="w-full h-16 text-xl font-black uppercase tracking-tighter flex justify-center items-center gap-4 border-4"
                   onClick={handleGoogleSignUp}
                 >
-                  <FcGoogle className="w-5 h-5" />
-                  Continue with Google
+                  <FcGoogle className="w-8 h-8" />
+                  Google Auth
                 </Button>
 
                 <Button
-                  className={`${amberButton} hover:bg-gray-100 text-black`}
+                  variant="neutral"
+                  className="w-full h-16 text-xl font-black uppercase tracking-tighter flex justify-center items-center gap-4 border-4"
                   onClick={handleGithubSignUp}
                 >
-                  <GithubIcon className="w-5 h-5" />
-                  Continue with GitHub
+                  <GithubIcon className="w-8 h-8" />
+                  GitHub Auth
                 </Button>
+                
+                <div className="relative py-4">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t-4 border-black"></span>
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase font-black">
+                    <span className="bg-white px-4 text-black">Terminal Access Only</span>
+                  </div>
+                </div>
+
+                <div className="bg-black p-4 font-mono text-xs text-green-500 overflow-hidden">
+                   <p className="animate-pulse">{">"} awaiting_credentials...</p>
+                   <p className="opacity-50">{">"} secure_socket_established</p>
+                </div>
               </>
             )}
           </div>
 
           {!user && (
-            <div className="p-2 text-center">
-              <p className="text-gray-400">
-                New to CodeClash?
-                <a href="#" className="text-amber-400 hover:underline">
-                  Sign up for an account
+            <div className="mt-8 text-center">
+              <p className="text-sm font-black uppercase tracking-widest">
+                New Prospect?{" "}
+                <a href="#" className="text-main hover:underline decoration-4 underline-offset-4">
+                  Register Protocol
                 </a>
               </p>
             </div>
