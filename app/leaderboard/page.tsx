@@ -24,14 +24,14 @@ export default function LeaderboardPage() {
   return (
     <div className="min-h-screen bg-background font-heading">
       <NavBarComp />
-      
+
       <main className="pt-32 pb-20 px-6 max-w-7xl mx-auto">
         {/* Header Section */}
         <div className="border-8 border-black bg-white p-12 shadow-[16px_16px_0px_0px_rgba(0,0,0,1)] mb-12 relative overflow-hidden text-black">
           <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
             <Trophy size={300} className="text-black" />
           </div>
-          
+
           <div className="relative z-10">
             <div className="bg-main text-black inline-block px-4 py-1 text-sm font-black uppercase mb-6 border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
               Global Rankings
@@ -49,8 +49,8 @@ export default function LeaderboardPage() {
         <div className="flex flex-col md:flex-row gap-6 mb-12">
           <div className="flex-1 relative">
             <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-black w-6 h-6" />
-            <input 
-              type="text" 
+            <input
+              type="text"
               placeholder="SEARCH_OPERATOR_BY_TAG..."
               className="w-full h-20 pl-16 pr-6 border-4 border-black bg-white font-mono font-bold text-xl focus:outline-none focus:bg-main transition-colors text-black placeholder:text-black/30 shadow-shadow"
               value={searchTerm}
@@ -138,10 +138,10 @@ export default function LeaderboardPage() {
 
         {/* Call to Action */}
         <div className="mt-20 p-12 border-4 border-black bg-black text-center shadow-[12px_12px_0px_0px_rgba(255,191,0,1)]">
-           <h2 className="text-4xl font-black text-white uppercase italic mb-6">Want to see your name here?</h2>
-           <Button className="h-16 px-12 text-2xl font-black uppercase tracking-tighter bg-main text-black border-4 border-black hover:translate-x-[4px] hover:translate-y-[4px] hover:shadow-none transition-all">
-              <Swords className="mr-2 h-6 w-6" /> Find Match
-           </Button>
+          <h2 className="text-4xl font-black text-white uppercase italic mb-6">Want to see your name here?</h2>
+          <Button className="h-16 px-12 text-2xl font-black uppercase tracking-tighter bg-main text-black border-4 border-black hover:translate-x-[4px] hover:translate-y-[4px] hover:shadow-none transition-all">
+            <Swords className="mr-2 h-6 w-6" /> Find Match
+          </Button>
         </div>
       </main>
     </div>

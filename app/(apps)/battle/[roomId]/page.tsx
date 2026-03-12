@@ -7,7 +7,7 @@ import { useSocket } from "@/lib/useSocket";
 import Editor from "@monaco-editor/react";
 import { useUserStore } from "@/store/useUserStore";
 import { Button } from "@/components/ui/button";
-import { Terminal, Swords, Zap, Timer, Trophy, ShieldAlert, CheckCircle2, Loader2, Send, MessageSquare, Play } from "lucide-react";
+import { Terminal, Swords, Zap, Timer, Trophy, ShieldAlert, CheckCircle2, Loader2, Send, MessageSquare } from "lucide-react";
 
 interface ExecutionResult {
   success: boolean;
@@ -37,7 +37,6 @@ interface QuestionData {
     output: string;
     explanation?: string;
   }>;
-  starterCode?: Record<string, string>;
 }
 
 interface BattleState {
@@ -53,38 +52,19 @@ interface ChatMessage {
   timestamp: number;
 }
 
-const boilerplates: Record<string, string> = {
-  javascript: `// Write your solution here\nfunction solve() {\n  // Read input or use parameters\n  console.log("Hello CodeClash");\n}\n\nsolve();`,
-  python: `# Write your solution here\ndef solve():\n    # Read input or use parameters\n    print("Hello CodeClash")\n\nif __name__ == "__main__":\n    solve()`,
-  cpp: `#include <iostream>\n\nint main() {\n    // Write your solution here\n    std::cout << "Hello CodeClash" << std::endl;\n    return 0;\n}`,
-  java: `public class Main {\n    public static void main(String[] args) {\n        // Write your solution here\n        System.out.println("Hello CodeClash");\n    }\n}`
-};
-
 export default function BattlePage() {
   const params = useParams();
   const roomId = params.roomId as string;
   const { isConnected, sendMessage, socket } = useSocket();
   const user = useUserStore((state) => state.user);
 
+  const [code, setCode] = useState("// Write your solution here\n");
   const [language, setLanguage] = useState("javascript");
-  const [code, setCode] = useState(boilerplates["javascript"]);
   const [battleState, setBattleState] = useState<BattleState>({ status: "WAITING" });
-  
-  // Handle language change
-  const handleLanguageChange = (newLang: string) => {
-    setLanguage(newLang);
-    // Use problem-specific starter code if available, otherwise fallback to generic boilerplate
-    if (question?.starterCode && question.starterCode[newLang]) {
-      setCode(question.starterCode[newLang]);
-    } else {
-      setCode(boilerplates[newLang] || "");
-    }
-  };
   const [players, setPlayers] = useState<PlayerInfo[]>([]);
   const [question, setQuestion] = useState<QuestionData | null>(null);
   const [result, setResult] = useState<ExecutionResult | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isRunning, setIsRunning] = useState(false);
   const [timeElapsed, setTimeElapsed] = useState(0);
   const [opponentInfo, setOpponentInfo] = useState<PlayerInfo | null>(null);
 
@@ -113,38 +93,17 @@ export default function BattlePage() {
         switch (message.type) {
           case "ROOM_STATE":
             setBattleState(message.payload.battleState);
-            const currentPlayers = message.payload.players;
-            setPlayers(currentPlayers);
-            const newQuestion = message.payload.question;
-            setQuestion(newQuestion);
-            
-            // Set initial code if the battle just started or question was loaded
-            if (newQuestion?.starterCode && newQuestion.starterCode[language]) {
-               setCode(newQuestion.starterCode[language]);
-            }
-
+            setPlayers(message.payload.players);
+            setQuestion(message.payload.question);
             if (message.payload.votes) setVotes(message.payload.votes);
-            
-            // Robust opponent lookup
-            const opponent = currentPlayers.find((p: PlayerInfo) => p.userId !== user?.uid);
-            if (opponent) setOpponentInfo(opponent);
+            const opponent = message.payload.players.find((p: PlayerInfo) => p.userId !== user?.uid);
+            setOpponentInfo(opponent || null);
             break;
           case "VOTE_UPDATE":
             setVotes(message.payload.votes);
             break;
           case "CHAT_MESSAGE":
             setMessages((prev) => [...prev, message.payload]);
-            break;
-          case "RUN_RESULT":
-            if (message.payload.userId === user?.uid) {
-              setResult({
-                success: message.payload.success,
-                output: message.payload.output,
-                error: message.payload.error,
-                time: message.payload.time,
-              });
-              setIsRunning(false);
-            }
             break;
           case "SUBMISSION_RESULT":
             if (message.payload.userId === user?.uid) {
@@ -176,22 +135,9 @@ export default function BattlePage() {
     return () => socket.removeEventListener("message", handleMessage);
   }, [socket, isConnected, roomId, user?.uid, sendMessage]);
 
-  const handleRun = async () => {
-    if (!user?.uid || !roomId || isRunning || isSubmitting) return;
-    setIsRunning(true);
-    setResult(null); // Clear previous results
-    sendMessage("RUN_CODE", {
-      roomId,
-      userId: user.uid,
-      code,
-      language,
-    });
-  };
-
   const handleSubmit = async () => {
-    if (!user?.uid || !roomId || isRunning || isSubmitting) return;
+    if (!user?.uid || !roomId || isSubmitting) return;
     setIsSubmitting(true);
-    setResult(null); // Clear previous results
     sendMessage("SUBMIT_CODE", {
       roomId,
       userId: user.uid,
@@ -287,9 +233,9 @@ export default function BattlePage() {
                 {messages.map((msg, i) => (
                   <div key={i} className={`flex flex-col ${msg.userId === user?.uid ? 'items-end' : 'items-start'}`}>
                     <span className="text-[10px] text-black/60 mb-1 font-black uppercase tracking-tighter">{msg.username}</span>
-                          <div className={`px-4 py-2 border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] font-black text-sm ${msg.userId === user?.uid ? 'bg-main text-black' : 'bg-secondary-background text-foreground'}`}>
-                             {msg.message}
-                          </div>
+                    <div className={`px-4 py-2 border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] font-black text-sm ${msg.userId === user?.uid ? 'bg-main text-black' : 'bg-secondary-background text-foreground'}`}>
+                      {msg.message}
+                    </div>
                   </div>
                 ))}
                 <div ref={chatEndRef} />
@@ -435,24 +381,16 @@ export default function BattlePage() {
             {/* Right: Code Arena */}
             <div className="lg:col-span-8 flex flex-col bg-secondary-background">
               <div className="flex-1 relative">
-                 <div className="absolute top-6 right-10 z-20 flex gap-4">
-                    <select 
-                      value={language}
-                      onChange={(e) => handleLanguageChange(e.target.value)}
-                      className="bg-main border-4 border-black px-4 py-2 font-black text-sm uppercase shadow-shadow text-black focus:outline-none cursor-pointer"
-                    >
-                      <option value="javascript">JS (Node 18)</option>
-                      <option value="python">Python 3.10</option>
-                      <option value="cpp">C++ (GCC 10)</option>
-                      <option value="java">Java (JDK 15)</option>
-                    </select>
-                 </div>
-                 <div className="h-full border-l-4 border-black">
-                   <Editor
+                <div className="absolute top-6 right-10 z-20 flex gap-4">
+                  <div className="bg-main border-4 border-black px-6 py-2 font-black text-sm uppercase shadow-shadow text-black">
+                    ENGINE: NODE_JS v18
+                  </div>
+                </div>
+                <div className="h-full border-l-4 border-black">
+                  <Editor
                     height="100%"
                     theme="vs-dark"
-                    language={language === 'cpp' ? 'cpp' : language}
-
+                    language={language}
                     value={code}
                     onChange={(v) => setCode(v || "")}
                     options={{
@@ -477,69 +415,49 @@ export default function BattlePage() {
                     <Terminal className="w-6 h-6" /> OPERATOR_CONSOLE
                   </h4>
                   <div className="flex gap-4">
-                    <Button 
-                      onClick={handleRun} 
-                      disabled={isRunning || isSubmitting || battleState.status !== "IN_PROGRESS"}
-                      className="h-16 px-8 text-xl font-black uppercase tracking-tighter bg-white text-black border-4 border-black shadow-shadow hover:translate-x-[4px] hover:translate-y-[4px] hover:shadow-none transition-all flex gap-2"
-                    >
-                      {isRunning ? (
-                        <>
-                          <Loader2 className="h-6 w-6 animate-spin" /> RUNNING...
-                        </>
-                      ) : (
-                        <>
-                          <Play className="h-6 w-6 fill-current" /> RUN
-                        </>
-                      )}
-                    </Button>
-                    <Button 
-                      onClick={handleSubmit} 
-                      disabled={isRunning || isSubmitting || battleState.status !== "IN_PROGRESS"}
-                      className="h-16 px-10 text-xl font-black uppercase tracking-tighter bg-main text-black border-4 border-black shadow-shadow hover:translate-x-[4px] hover:translate-y-[4px] hover:shadow-none transition-all flex gap-2"
+                    <Button
+                      onClick={handleSubmit}
+                      disabled={isSubmitting || battleState.status !== "IN_PROGRESS"}
+                      className="h-16 px-12 text-2xl font-black uppercase tracking-tighter bg-main text-black border-4 border-black shadow-shadow hover:translate-x-[4px] hover:translate-y-[4px] hover:shadow-none transition-all"
                     >
                       {isSubmitting ? (
                         <>
-                          <Loader2 className="h-6 w-6 animate-spin" /> SUBMITTING...
+                          <Loader2 className="mr-2 h-6 w-6 animate-spin" /> COMPILING...
                         </>
-                      ) : (
-                        <>
-                          <Send className="h-6 w-6" /> SUBMIT
-                        </>
-                      )}
+                      ) : "DEPLOY_CODE"}
                     </Button>
                   </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto font-mono text-base border-4 border-white/10 p-4 bg-[#0a0a0a]">
+                <div className="flex-1 overflow-y-auto font-mono text-base border-4 border-white/10 p-4 bg-white/5">
                   {result ? (
                     <div className={`p-4 border-4 ${result.success ? 'border-green-500 bg-green-500/10 text-green-400' : 'border-red-500 bg-red-500/10 text-red-400 shadow-[8px_8px_0px_0px_rgba(239,68,68,0.2)]'}`}>
                       <p className="font-black uppercase mb-4 flex items-center gap-3 text-xl">
                         {result.success ? <CheckCircle2 className="w-8 h-8" /> : <ShieldAlert className="w-8 h-8" />}
                         {result.success ? "UNIT_TESTS_CLEARED" : "FATAL_ERROR_DETECTED"}
                       </p>
-                      <pre className="text-sm whitespace-pre-wrap p-4 bg-black/60 border-2 border-current/20 text-white font-bold leading-relaxed">
+                      <pre className="text-sm whitespace-pre-wrap p-4 bg-black/40 border-2 border-current/20">
                         {result.output || result.error || "NO_OUTPUT_LOGGED"}
                       </pre>
                       {result.time !== undefined && (
                         <div className="mt-4 flex gap-4 text-xs font-black uppercase">
-                           <span>EXEC_TIME: {result.time}MS</span>
-                           <span className="opacity-50">|</span>
-                           <span>STATUS: {result.success ? "READY" : "FAILED"}</span>
+                          <span>EXEC_TIME: {result.time}MS</span>
+                          <span className="opacity-50">|</span>
+                          <span>STATUS: {result.success ? "READY" : "FAILED"}</span>
                         </div>
                       )}
                     </div>
                   ) : (
-                    <div className="flex flex-col gap-2 opacity-60 italic text-green-500/70">
+                    <div className="flex flex-col gap-2 opacity-40 italic">
                       <p className="flex gap-2">
                         <span className="text-main font-black tracking-widest animate-pulse">[IDLE]</span>
                         Awaiting operator input...
                       </p>
-                      <p className="text-xs tracking-widest">SYSTEM_VERSION: 1.0.4-STABLE</p>
+                      <p className="text-xs text-white/20 tracking-widest">SYSTEM_VERSION: 1.0.4-STABLE</p>
                     </div>
                   )}
                 </div>
               </div>
-
             </div>
           </div>
 
