@@ -7,10 +7,21 @@ import { useSocket } from "@/lib/useSocket";
 import Editor from "@monaco-editor/react";
 import { useUserStore } from "@/store/useUserStore";
 import { Button } from "@/components/ui/button";
-import { Terminal, Swords, Zap, Timer, Trophy, ShieldAlert, CheckCircle2, Loader2, Send, MessageSquare } from "lucide-react";
+import { Terminal, Zap, Trophy, ShieldAlert, CheckCircle2, Loader2, Send, MessageSquare, Play, Code2, Globe } from "lucide-react";
+
+interface TestCaseResult {
+  testCaseId: string;
+  passed: boolean;
+  expected: string;
+  actual: string;
+  error?: string;
+  time?: number;
+  statusDescription?: string;
+}
 
 interface ExecutionResult {
   success: boolean;
+  testResults?: TestCaseResult[];
   output?: string;
   error?: string;
   time?: number;
@@ -37,6 +48,7 @@ interface QuestionData {
     output: string;
     explanation?: string;
   }>;
+  starterCode?: Record<string, string>;
 }
 
 interface BattleState {
@@ -64,9 +76,38 @@ export default function BattlePage() {
   const [players, setPlayers] = useState<PlayerInfo[]>([]);
   const [question, setQuestion] = useState<QuestionData | null>(null);
   const [result, setResult] = useState<ExecutionResult | null>(null);
+  const [activeTestCase, setActiveTestCase] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRunning, setIsRunning] = useState(false);
   const [timeElapsed, setTimeElapsed] = useState(0);
   const [opponentInfo, setOpponentInfo] = useState<PlayerInfo | null>(null);
+
+  // Tracks if code has been initialized for each language
+  const initializedLanguages = useRef<Set<string>>(new Set());
+
+  // Initialize code when question loads
+  useEffect(() => {
+    if (question?.starterCode && !initializedLanguages.current.has(language)) {
+      const starter = question.starterCode[language];
+      if (starter) {
+        setCode(starter);
+        initializedLanguages.current.add(language);
+      }
+    }
+  }, [question, language]);
+
+  const handleLanguageChange = (newLang: string) => {
+    setLanguage(newLang);
+    // If we haven't initialized this language yet, useEffect will handle it
+    // If we have, it keeps what the user wrote
+    if (question?.starterCode && !initializedLanguages.current.has(newLang)) {
+      const starter = question.starterCode[newLang];
+      if (starter) {
+        setCode(starter);
+        initializedLanguages.current.add(newLang);
+      }
+    }
+  };
 
   // Lobby State
   const [votes, setVotes] = useState<Record<string, string>>({});
@@ -105,11 +146,22 @@ export default function BattlePage() {
           case "CHAT_MESSAGE":
             setMessages((prev) => [...prev, message.payload]);
             break;
+          case "RUN_RESULT":
+            if (message.payload.userId === user?.uid) {
+              setResult({
+                success: message.payload.success,
+                testResults: message.payload.testResults,
+                error: message.payload.error,
+                time: message.payload.time,
+              });
+              setIsRunning(false);
+            }
+            break;
           case "SUBMISSION_RESULT":
             if (message.payload.userId === user?.uid) {
               setResult({
                 success: message.payload.passedAllTests,
-                output: message.payload.output,
+                testResults: message.payload.testResults,
                 error: message.payload.error,
                 time: message.payload.time,
               });
@@ -134,6 +186,17 @@ export default function BattlePage() {
     sendMessage("JOIN_ROOM", { roomId, userId: user.uid });
     return () => socket.removeEventListener("message", handleMessage);
   }, [socket, isConnected, roomId, user?.uid, sendMessage]);
+
+  const handleRun = async () => {
+    if (!user?.uid || !roomId || isRunning) return;
+    setIsRunning(true);
+    sendMessage("RUN_CODE", {
+      roomId,
+      userId: user.uid,
+      code,
+      language,
+    });
+  };
 
   const handleSubmit = async () => {
     if (!user?.uid || !roomId || isSubmitting) return;
@@ -359,7 +422,7 @@ export default function BattlePage() {
                           </div>
                           {ex.explanation && (
                             <p className="text-xs text-white/50 border-t border-white/20 pt-2 italic">
-                              // {ex.explanation}
+                              {"// "} {ex.explanation}
                             </p>
                           )}
                         </div>
@@ -382,8 +445,23 @@ export default function BattlePage() {
             <div className="lg:col-span-8 flex flex-col bg-secondary-background">
               <div className="flex-1 relative">
                 <div className="absolute top-6 right-10 z-20 flex gap-4">
-                  <div className="bg-main border-4 border-black px-6 py-2 font-black text-sm uppercase shadow-shadow text-black">
-                    ENGINE: NODE_JS v18
+                  <div className="flex items-center bg-black border-4 border-white/20 p-1 shadow-shadow">
+                    <div className="flex items-center gap-2 px-3 py-1 bg-main text-black font-black text-xs uppercase">
+                      <Globe className="w-3 h-3" /> LANG:
+                    </div>
+                    <select 
+                      value={language}
+                      onChange={(e) => handleLanguageChange(e.target.value)}
+                      className="bg-black text-white font-mono text-xs px-4 py-1.5 focus:outline-none cursor-pointer uppercase hover:bg-white/10 transition-colors"
+                    >
+                      <option value="javascript">JAVASCRIPT (NODE_JS)</option>
+                      <option value="python">PYTHON 3.10</option>
+                      <option value="cpp">C++ 17</option>
+                      <option value="java">JAVA 17</option>
+                    </select>
+                  </div>
+                  <div className="bg-main border-4 border-black px-6 py-2 font-black text-sm uppercase shadow-shadow text-black flex items-center gap-2">
+                    <Code2 className="w-4 h-4" /> ENGINE_READY
                   </div>
                 </div>
                 <div className="h-full border-l-4 border-black">
@@ -415,45 +493,104 @@ export default function BattlePage() {
                     <Terminal className="w-6 h-6" /> OPERATOR_CONSOLE
                   </h4>
                   <div className="flex gap-4">
-                    <Button
-                      onClick={handleSubmit}
-                      disabled={isSubmitting || battleState.status !== "IN_PROGRESS"}
-                      className="h-16 px-12 text-2xl font-black uppercase tracking-tighter bg-main text-black border-4 border-black shadow-shadow hover:translate-x-[4px] hover:translate-y-[4px] hover:shadow-none transition-all"
+                    <Button 
+                      onClick={handleRun} 
+                      disabled={isRunning || isSubmitting || battleState.status !== "IN_PROGRESS"}
+                      className="h-16 px-8 text-xl font-black uppercase tracking-tighter bg-white text-black border-4 border-black shadow-shadow hover:translate-x-[4px] hover:translate-y-[4px] hover:shadow-none transition-all flex gap-2"
+                    >
+                      {isRunning ? (
+                        <>
+                          <Loader2 className="h-6 w-6 animate-spin" /> RUNNING...
+                        </>
+                      ) : (
+                        <>
+                          <Play className="h-6 w-6 fill-current" /> RUN
+                        </>
+                      )}
+                    </Button>
+                    <Button 
+                      onClick={handleSubmit} 
+                      disabled={isRunning || isSubmitting || battleState.status !== "IN_PROGRESS"}
+                      className="h-16 px-10 text-xl font-black uppercase tracking-tighter bg-main text-black border-4 border-black shadow-shadow hover:translate-x-[4px] hover:translate-y-[4px] hover:shadow-none transition-all flex gap-2"
                     >
                       {isSubmitting ? (
                         <>
-                          <Loader2 className="mr-2 h-6 w-6 animate-spin" /> COMPILING...
+                          <Loader2 className="h-6 w-6 animate-spin" /> SUBMITTING...
                         </>
-                      ) : "DEPLOY_CODE"}
+                      ) : (
+                        <>
+                          <Send className="h-6 w-6" /> SUBMIT
+                        </>
+                      )}
                     </Button>
                   </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto font-mono text-base border-4 border-white/10 p-4 bg-white/5">
+                <div className="flex-1 overflow-y-auto font-mono text-base border-4 border-white/10 p-4 bg-[#0a0a0a]">
                   {result ? (
-                    <div className={`p-4 border-4 ${result.success ? 'border-green-500 bg-green-500/10 text-green-400' : 'border-red-500 bg-red-500/10 text-red-400 shadow-[8px_8px_0px_0px_rgba(239,68,68,0.2)]'}`}>
-                      <p className="font-black uppercase mb-4 flex items-center gap-3 text-xl">
-                        {result.success ? <CheckCircle2 className="w-8 h-8" /> : <ShieldAlert className="w-8 h-8" />}
-                        {result.success ? "UNIT_TESTS_CLEARED" : "FATAL_ERROR_DETECTED"}
-                      </p>
-                      <pre className="text-sm whitespace-pre-wrap p-4 bg-black/40 border-2 border-current/20">
-                        {result.output || result.error || "NO_OUTPUT_LOGGED"}
-                      </pre>
-                      {result.time !== undefined && (
-                        <div className="mt-4 flex gap-4 text-xs font-black uppercase">
-                          <span>EXEC_TIME: {result.time}MS</span>
-                          <span className="opacity-50">|</span>
-                          <span>STATUS: {result.success ? "READY" : "FAILED"}</span>
+                    <div className="h-full flex flex-col">
+                      {/* Test Case Tabs */}
+                      <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
+                        {result.testResults?.map((tr, i) => (
+                          <button
+                            key={tr.testCaseId}
+                            onClick={() => setActiveTestCase(i)}
+                            className={`px-4 py-2 border-2 font-black text-xs transition-all flex items-center gap-2 whitespace-nowrap ${
+                              activeTestCase === i 
+                                ? 'bg-main text-black border-black shadow-[2px_2px_0px_0px_rgba(255,255,255,1)]' 
+                                : tr.passed 
+                                  ? 'bg-green-500/10 text-green-500 border-green-500/50 hover:bg-green-500/20' 
+                                  : 'bg-red-500/10 text-red-500 border-red-500/50 hover:bg-red-500/20'
+                            }`}
+                          >
+                            {tr.passed ? <CheckCircle2 className="w-3 h-3" /> : <ShieldAlert className="w-3 h-3" />}
+                            TEST_{i + 1}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Active Test Case Detail */}
+                      {result.testResults?.[activeTestCase] ? (
+                        <div className={`flex-1 p-4 border-4 ${result.testResults[activeTestCase].passed ? 'border-green-500/50 bg-green-500/5' : 'border-red-500/50 bg-red-500/5'}`}>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <p className="text-[10px] font-black text-white/40 uppercase tracking-widest">Expected Output</p>
+                              <pre className="p-3 bg-black/60 border border-white/10 text-white text-xs rounded">
+                                {result.testResults[activeTestCase].expected}
+                              </pre>
+                            </div>
+                            <div className="space-y-2">
+                              <p className="text-[10px] font-black text-white/40 uppercase tracking-widest">Actual Output</p>
+                              <pre className={`p-3 bg-black/60 border border-white/10 text-xs rounded ${result.testResults[activeTestCase].passed ? 'text-green-400' : 'text-red-400'}`}>
+                                {result.testResults[activeTestCase].actual || "(no output)"}
+                              </pre>
+                            </div>
+                          </div>
+                          
+                          {result.testResults[activeTestCase].error && (
+                            <div className="mt-4 p-3 bg-red-900/20 border border-red-500/30 text-red-400 text-xs font-bold whitespace-pre-wrap">
+                              {result.testResults[activeTestCase].error}
+                            </div>
+                          )}
+
+                          <div className="mt-4 flex gap-4 text-[10px] font-black uppercase text-white/40 border-t border-white/5 pt-4">
+                            <span>Status: <span className={result.testResults[activeTestCase].passed ? 'text-green-500' : 'text-red-500'}>{result.testResults[activeTestCase].statusDescription || (result.testResults[activeTestCase].passed ? "Accepted" : "Failed")}</span></span>
+                            <span>Time: {result.testResults[activeTestCase].time?.toFixed(2)}ms</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex-1 flex items-center justify-center border-4 border-white/5 bg-white/5 opacity-40 italic text-sm">
+                          Select a test case to view details
                         </div>
                       )}
                     </div>
                   ) : (
-                    <div className="flex flex-col gap-2 opacity-40 italic">
+                    <div className="flex flex-col gap-2 opacity-60 italic text-green-500/70">
                       <p className="flex gap-2">
                         <span className="text-main font-black tracking-widest animate-pulse">[IDLE]</span>
                         Awaiting operator input...
                       </p>
-                      <p className="text-xs text-white/20 tracking-widest">SYSTEM_VERSION: 1.0.4-STABLE</p>
+                      <p className="text-xs tracking-widest">SYSTEM_VERSION: 1.0.4-STABLE</p>
                     </div>
                   )}
                 </div>
