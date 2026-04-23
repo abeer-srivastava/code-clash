@@ -5,9 +5,12 @@ import { useParams } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
 import { useSocket } from "@/lib/useSocket";
 import Editor from "@monaco-editor/react";
+import PixelBlast from "@/components/PixelBlast";
 import { useUserStore } from "@/store/useUserStore";
 import { Button } from "@/components/ui/button";
-import { Terminal, Zap, Trophy, ShieldAlert, CheckCircle2, Loader2, Send, MessageSquare, Play, Code2, Globe } from "lucide-react";
+import { Terminal, Zap, Trophy, ShieldAlert, CheckCircle2, Loader2, Send, MessageSquare, Play, Code2, Globe, Activity } from "lucide-react";
+import { useEffect as useGsapEffect } from "react";
+import gsap from "gsap";
 
 interface TestCaseResult {
   testCaseId: string;
@@ -70,6 +73,7 @@ export default function BattlePage() {
   const { isConnected, sendMessage, socket } = useSocket();
   const user = useUserStore((state) => state.user);
 
+  const [triggerEffect, setTriggerEffect] = useState(false);
   const [code, setCode] = useState("// Write your solution here\n");
   const [language, setLanguage] = useState("javascript");
   const [battleState, setBattleState] = useState<BattleState>({ status: "WAITING" });
@@ -81,6 +85,14 @@ export default function BattlePage() {
   const [isRunning, setIsRunning] = useState(false);
   const [timeElapsed, setTimeElapsed] = useState(0);
   const [opponentInfo, setOpponentInfo] = useState<PlayerInfo | null>(null);
+  const [opponentProgress, setOpponentProgress] = useState<{
+    activity: "RUNNING" | "SUBMITTING" | "IDLE";
+    testsPassed?: number;
+    totalTests?: number;
+    success?: boolean;
+    lastUpdate: number;
+  }>({ activity: "IDLE", lastUpdate: 0 });
+  const [opponentCursor, setOpponentCursor] = useState<{ line: number; ch: number } | null>(null);
 
   // Tracks if code has been initialized for each language
   const initializedLanguages = useRef<Set<string>>(new Set());
@@ -88,7 +100,8 @@ export default function BattlePage() {
   // Initialize code when question loads
   useEffect(() => {
     if (question?.starterCode && !initializedLanguages.current.has(language)) {
-      const starter = question.starterCode[language];
+      const starterCodeObj = question.starterCode as any;
+      const starter = starterCodeObj[language];
       if (starter) {
         setCode(starter);
         initializedLanguages.current.add(language);
@@ -101,7 +114,8 @@ export default function BattlePage() {
     // If we haven't initialized this language yet, useEffect will handle it
     // If we have, it keeps what the user wrote
     if (question?.starterCode && !initializedLanguages.current.has(newLang)) {
-      const starter = question.starterCode[newLang];
+      const starterCodeObj = question.starterCode as any;
+      const starter = starterCodeObj[newLang];
       if (starter) {
         setCode(starter);
         initializedLanguages.current.add(newLang);
@@ -114,11 +128,18 @@ export default function BattlePage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const [showVS, setShowVS] = useState(false);
 
   useEffect(() => {
-    if (battleState.status !== "IN_PROGRESS") return;
-    const interval = setInterval(() => setTimeElapsed((prev) => prev + 1), 1000);
-    return () => clearInterval(interval);
+    if (battleState.status === "IN_PROGRESS") {
+      setShowVS(true);
+      const timer = setTimeout(() => setShowVS(false), 3000);
+      const interval = setInterval(() => setTimeElapsed((prev) => prev + 1), 1000);
+      return () => {
+        clearInterval(interval);
+        clearTimeout(timer);
+      };
+    }
   }, [battleState.status]);
 
   useEffect(() => {
@@ -168,6 +189,22 @@ export default function BattlePage() {
               setIsSubmitting(false);
             }
             break;
+          case "CURSOR_MOVE":
+            if (message.payload.userId !== user?.uid) {
+              setOpponentCursor({ line: message.payload.line, ch: message.payload.ch });
+            }
+            break;
+          case "OPPONENT_PROGRESS":
+            if (message.payload.userId !== user?.uid) {
+              setOpponentProgress({
+                activity: message.payload.activity,
+                testsPassed: message.payload.testsPassed,
+                totalTests: message.payload.totalTests,
+                success: message.payload.success,
+                lastUpdate: Date.now(),
+              });
+            }
+            break;
           case "BATTLE_END":
             setBattleState((prev) => ({
               ...prev,
@@ -186,6 +223,14 @@ export default function BattlePage() {
     sendMessage("JOIN_ROOM", { roomId, userId: user.uid });
     return () => socket.removeEventListener("message", handleMessage);
   }, [socket, isConnected, roomId, user?.uid, sendMessage]);
+
+  useEffect(() => {
+    if (result?.success) {
+      setTriggerEffect(true);
+      const timer = setTimeout(() => setTriggerEffect(false), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [result]);
 
   const handleRun = async () => {
     if (!user?.uid || !roomId || isRunning) return;
@@ -327,15 +372,32 @@ export default function BattlePage() {
             <div className="max-w-[1600px] mx-auto py-6 flex flex-col md:flex-row items-center justify-between gap-6">
 
               {/* Player 1 */}
-              <div className="flex items-center gap-4 bg-white border-4 border-black p-3 shadow-shadow min-w-[240px] text-black transition-all">
-                <div className="w-14 h-14 bg-main border-2 border-black flex items-center justify-center font-black text-2xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">P1</div>
-                <div className="overflow-hidden">
+              <div className="flex items-center gap-4 bg-white border-4 border-black p-3 shadow-shadow min-w-[240px] text-black transition-all relative overflow-hidden">
+                {(isRunning || isSubmitting) && (
+                  <div className="absolute inset-0 bg-main/5 animate-pulse pointer-events-none" />
+                )}
+                <div className="w-14 h-14 bg-main border-2 border-black flex items-center justify-center font-black text-2xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] relative z-10">
+                  {isRunning || isSubmitting ? <Activity className="w-8 h-8 animate-spin" /> : "P1"}
+                </div>
+                <div className="overflow-hidden flex-1 relative z-10">
                   <p className="text-[10px] font-black uppercase tracking-widest text-black/50">LOCAL_OPERATOR</p>
                   <p className="text-xl font-black uppercase truncate">{user?.displayName || "YOU"}</p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <div className={`h-2 flex-1 border border-black bg-black/10`}>
-                      <div className="h-full bg-green-500 w-full animate-pulse"></div>
+                  <div className="flex flex-col gap-1 mt-1">
+                    <div className={`h-2 flex-1 border border-black bg-black/10 overflow-hidden`}>
+                      {isRunning || isSubmitting ? (
+                        <div className="h-full bg-green-500 w-full animate-progress-fast"></div>
+                      ) : (
+                        <div 
+                          className={`h-full transition-all duration-500 ${result?.success ? 'bg-green-500' : (result?.testResults ? 'bg-red-500' : 'bg-black/10')}`} 
+                          style={{ width: result?.testResults ? `${(result.testResults.filter(r => r.passed).length) / (result.testResults.length) * 100}%` : '0%' }}
+                        />
+                      )}
                     </div>
+                    {result?.testResults && (
+                      <p className="text-[8px] font-black text-black/60 uppercase">
+                        Passed: {result.testResults.filter(r => r.passed).length}/{result.testResults.length} Tests
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -357,20 +419,57 @@ export default function BattlePage() {
               </div>
 
               {/* Player 2 */}
-              <div className="flex items-center gap-4 bg-white border-4 border-black p-3 shadow-shadow min-w-[240px] text-black">
-                <div className="text-right overflow-hidden flex-1">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-black/50">REMOTE_TARGET</p>
+              <div className="flex items-center gap-4 bg-white border-4 border-black p-3 shadow-shadow min-w-[240px] text-black relative overflow-hidden">
+                {opponentProgress.activity !== "IDLE" && (
+                  <div className="absolute inset-0 bg-main/10 animate-pulse pointer-events-none" />
+                )}
+                <div className="text-right overflow-hidden flex-1 relative z-10">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-black/50">
+                    {opponentProgress.activity === "RUNNING" ? "EXECUTING_CODE..." : 
+                     opponentProgress.activity === "SUBMITTING" ? "FINALIZING_SUBMISSION..." : 
+                     "REMOTE_TARGET"}
+                  </p>
                   <p className="text-xl font-black uppercase truncate">{opponentInfo?.username || "???"}</p>
-                  <div className="flex items-center gap-2 mt-1 justify-end">
-                    <div className={`h-2 w-full border border-black bg-black/10`}>
-                      {opponentInfo && <div className="h-full bg-red-500 w-full animate-pulse"></div>}
+                  
+                  {/* Opponent Progress Bar */}
+                  <div className="flex flex-col gap-1 mt-1">
+                    <div className={`h-2 w-full border border-black bg-black/10 overflow-hidden`}>
+                      {opponentProgress.activity !== "IDLE" ? (
+                        <div className="h-full bg-main w-full animate-progress-fast" />
+                      ) : (
+                        <div 
+                          className={`h-full transition-all duration-500 ${opponentProgress.success ? 'bg-green-500' : 'bg-red-500'}`} 
+                          style={{ width: `${(opponentProgress.testsPassed || 0) / (opponentProgress.totalTests || 1) * 100}%` }}
+                        />
+                      )}
                     </div>
+                    {opponentProgress.totalTests && (
+                      <p className="text-[8px] font-black text-black/60 uppercase">
+                        Progress: {opponentProgress.testsPassed}/{opponentProgress.totalTests} Tests
+                      </p>
+                    )}
                   </div>
                 </div>
-                <div className="w-14 h-14 bg-red-500 border-2 border-black flex items-center justify-center font-black text-2xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">P2</div>
+                <div className="w-14 h-14 bg-red-500 border-2 border-black flex items-center justify-center font-black text-2xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] relative z-10">
+                  {opponentProgress.activity === "IDLE" ? "P2" : <Activity className="w-8 h-8 animate-spin" />}
+                </div>
               </div>
             </div>
           </div>
+
+          {/* Impact Effect Layer */}
+          {triggerEffect && (
+            <div className="fixed inset-0 z-[100] pointer-events-none opacity-40">
+              <PixelBlast 
+                color="#22c55e" 
+                variant="diamond" 
+                pixelSize={20} 
+                patternDensity={2} 
+                speed={2}
+                edgeFade={1}
+              />
+            </div>
+          )}
 
           {/* Main Arena */}
           <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-0 overflow-hidden">
@@ -471,6 +570,18 @@ export default function BattlePage() {
                     language={language}
                     value={code}
                     onChange={(v) => setCode(v || "")}
+                    onMount={(editor) => {
+                      editor.onDidChangeCursorPosition((e) => {
+                        if (isConnected && user?.uid && roomId) {
+                          sendMessage("CURSOR_MOVE", {
+                            roomId,
+                            userId: user.uid,
+                            line: e.position.lineNumber,
+                            ch: e.position.column
+                          });
+                        }
+                      });
+                    }}
                     options={{
                       fontSize: 18,
                       fontFamily: 'Share Tech Mono',
@@ -487,7 +598,7 @@ export default function BattlePage() {
               </div>
 
               {/* Bottom Console */}
-              <div className="h-72 bg-black border-t-8 border-black p-8 flex flex-col">
+              <div className="h-[420px] bg-black border-t-8 border-black p-8 flex flex-col">
                 <div className="flex justify-between items-center mb-6">
                   <h4 className="text-main text-lg font-black uppercase tracking-widest flex items-center gap-3">
                     <Terminal className="w-6 h-6" /> OPERATOR_CONSOLE
@@ -622,6 +733,49 @@ export default function BattlePage() {
                     Next Match
                   </Button>
                 </div>
+              </div>
+            </div>
+          )}
+          {/* VS Animation Overlay */}
+          {showVS && (
+            <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black overflow-hidden">
+              <div className="absolute inset-0 pointer-events-none opacity-30">
+                <div className="absolute inset-0 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] bg-[length:100%_2px,3px_100%]" />
+              </div>
+
+              <div className="relative w-full flex flex-col md:flex-row items-center justify-center gap-12 md:gap-0">
+                {/* Player 1 */}
+                <div className="flex-1 w-full flex justify-center md:justify-end animate-in slide-in-from-left-full duration-700 ease-out px-10">
+                  <div className="bg-white border-8 border-black p-8 shadow-[12px_12px_0px_0px_rgba(255,191,0,1)] text-black text-center min-w-[280px] transform -rotate-2">
+                    <p className="text-[10px] font-black uppercase tracking-[0.3em] mb-2 opacity-50">OPERATOR_01</p>
+                    <h3 className="text-4xl md:text-6xl font-black uppercase tracking-tighter">{user?.displayName?.split(' ')[0] || "YOU"}</h3>
+                    <div className="mt-4 bg-black text-white py-1 px-4 font-black text-sm inline-block">ELO: 1200</div>
+                  </div>
+                </div>
+
+                {/* VS Text */}
+                <div className="relative z-10 flex items-center justify-center">
+                   <div className="bg-main border-8 border-black p-6 md:p-10 shadow-[12px_12px_0px_0px_white] animate-in zoom-in-50 spin-in-12 duration-500 delay-300">
+                      <span className="text-7xl md:text-9xl font-black italic tracking-tighter text-black">VS</span>
+                   </div>
+                   {/* Decorative elements */}
+                   <div className="absolute -top-10 -left-10 w-20 h-20 bg-cyan-400 border-4 border-black animate-ping opacity-20"></div>
+                   <div className="absolute -bottom-10 -right-10 w-20 h-20 bg-red-500 border-4 border-black animate-ping opacity-20 delay-300"></div>
+                </div>
+
+                {/* Player 2 */}
+                <div className="flex-1 w-full flex justify-center md:justify-start animate-in slide-in-from-right-full duration-700 ease-out px-10">
+                  <div className="bg-white border-8 border-black p-8 shadow-[12px_12px_0px_0px_rgba(34,197,94,1)] text-black text-center min-w-[280px] transform rotate-2">
+                    <p className="text-[10px] font-black uppercase tracking-[0.3em] mb-2 opacity-50">OPERATOR_02</p>
+                    <h3 className="text-4xl md:text-6xl font-black uppercase tracking-tighter">{opponentInfo?.username || "???"}</h3>
+                    <div className="mt-4 bg-black text-white py-1 px-4 font-black text-sm inline-block">ELO: {opponentInfo?.elo || "???"}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Background text */}
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[20vw] font-black text-white/5 whitespace-nowrap pointer-events-none select-none uppercase italic tracking-tighter">
+                CODE_CLASH_ARENA
               </div>
             </div>
           )}

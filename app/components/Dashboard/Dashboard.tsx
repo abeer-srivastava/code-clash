@@ -1,7 +1,7 @@
 "use client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Trophy, Users, Code2, BarChart3, Target, Zap, Loader2, ArrowUpRight, Swords, Wifi, WifiOff } from "lucide-react";
+import { Trophy, Users, Code2, BarChart3, Target, Zap, Loader2, ArrowUpRight, Swords, Wifi, WifiOff, X } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { useUserStore } from "@/store/useUserStore";
 import { useRouter } from "next/navigation";
@@ -69,8 +69,75 @@ export default function Dashboard() {
     }
   };
 
+  const cancelMatchmaking = () => {
+    // Ideally send a LEAVE_MATCHMAKING message to backend
+    setIsSearching(false);
+  };
+
   return (
     <div className="min-h-screen bg-background text-foreground p-6 md:p-8 space-y-10 font-heading">
+      {/* Matchmaking Overlay */}
+      {isSearching && (
+        <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-black/90 backdrop-blur-md p-6 overflow-hidden">
+          <div className="absolute inset-0 pointer-events-none opacity-20">
+            <div className="absolute inset-0 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] bg-[length:100%_2px,3px_100%]" />
+          </div>
+
+          <div className="relative flex flex-col items-center max-w-2xl w-full">
+            <div className="bg-main border-8 border-black p-12 shadow-[16px_16px_0px_0px_white] animate-in zoom-in-95 duration-300 w-full text-center relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-2 bg-black overflow-hidden">
+                <div className="h-full bg-white animate-progress-fast w-1/3"></div>
+              </div>
+
+              <div className="mb-10 relative">
+                <Swords size={120} className="text-black mx-auto animate-bounce" />
+                <div className="absolute -top-4 -right-4 bg-black text-white px-3 py-1 font-black text-xs animate-pulse">
+                  SEARCHING...
+                </div>
+              </div>
+
+              <h2 className="text-5xl md:text-7xl font-black uppercase tracking-tighter italic mb-4 text-black">
+                ARENA_SYNC
+              </h2>
+              
+              <div className="flex flex-col gap-2 mb-10">
+                <div className="bg-black text-main py-2 px-4 font-mono text-sm inline-block mx-auto uppercase tracking-widest border-2 border-white/20">
+                  {">"} INITIATING_PEER_DISCOVERY...
+                </div>
+                <div className="text-black/60 font-black text-xs uppercase tracking-[0.3em]">
+                  Expected Wait: {"<"} 30 SECONDS
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 mb-8">
+                <div className="border-4 border-black p-4 bg-white/50">
+                  <p className="text-[10px] font-black uppercase text-black/40 mb-1">LOCAL_ELO</p>
+                  <p className="text-2xl font-black text-black">1200</p>
+                </div>
+                <div className="border-4 border-black p-4 bg-white/50">
+                  <p className="text-[10px] font-black uppercase text-black/40 mb-1">SEARCH_RANGE</p>
+                  <p className="text-2xl font-black text-black">±100</p>
+                </div>
+              </div>
+
+              <Button 
+                variant="neutral" 
+                onClick={cancelMatchmaking}
+                className="h-16 w-full text-xl font-black uppercase tracking-widest bg-white text-black border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[4px] hover:translate-y-[4px] hover:shadow-none transition-all"
+              >
+                <X className="mr-2 h-6 w-6" /> CANCEL_PROTOCOL
+              </Button>
+            </div>
+
+            <div className="mt-12 flex gap-8">
+              {[1, 2, 3].map(i => (
+                <div key={i} className={`w-4 h-4 border-2 border-white animate-pulse delay-${i * 200}`}></div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 border-b-8 border-black pb-8">
         <div>
